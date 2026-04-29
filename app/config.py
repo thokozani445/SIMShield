@@ -13,12 +13,21 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 60
 
-    # CAMARA / Nokia
+    # CAMARA mode
     mock_mode: bool = True
-    nokia_api_base_url: str = "https://network-as-code.nokia.com"
-    nokia_client_id: str = ""
-    nokia_client_secret: str = ""
-    nokia_token_url: str = ""
+
+    # RapidAPI / Nokia Network-as-Code
+    rapidapi_key: str = ""
+
+    rapidapi_host_sim_swap: str = ""
+    rapidapi_host_number_verification: str = ""
+    rapidapi_host_device_status: str = ""
+    rapidapi_host_location_verification: str = ""
+
+    rapidapi_url_sim_swap: str = ""
+    rapidapi_url_number_verification: str = ""
+    rapidapi_url_device_status: str = ""
+    rapidapi_url_location_verification: str = ""
 
     # AI Orchestrator
     anthropic_api_key: str = ""

@@ -24,7 +24,7 @@ _MOCK_SCENARIOS = {
         sim_swap_recent=True,
         sim_swap_hours_ago=3.0,
         number_verified=True,
-        device_reachable=False,
+        device_reachable=True,
     ),
     "scenario_c": dict(
         sim_swap_recent=True,
@@ -64,79 +64,78 @@ class CamaraClient:
         self._token: str | None = None
 
     async def get_signals(self, msisdn: str) -> SignalResult:
-        """Fetch all three signals. Returns mock when MOCK_MODE=true."""
         if settings.mock_mode:
+            print(f"[MOCK] Returning scripted response for {msisdn}")
             return _resolve_mock(msisdn)
+        print(f"[LIVE] Calling Nokia APIs for {msisdn}")
 
         import asyncio
-        sim, verified, reachable = await asyncio.gather(
+        sim_swap, number_verified, device_reachable = await asyncio.gather(
             self._check_sim_swap(msisdn),
             self._verify_number(msisdn),
             self._get_device_status(msisdn),
         )
         return SignalResult(
-            sim_swap_recent=sim["recent"],
-            sim_swap_hours_ago=sim["hours_ago"],
-            number_verified=verified,
-            device_reachable=reachable,
+            sim_swap_recent=sim_swap["recent"],
+            sim_swap_hours_ago=sim_swap["hours_ago"],
+            number_verified=number_verified,
+            device_reachable=device_reachable,
             fetched_at=datetime.now(timezone.utc),
             mock_mode=False,
         )
 
-    async def _get_token(self) -> str:
-        if self._token:
-            return self._token
-        async with httpx.AsyncClient() as c:
-            r = await c.post(
-                settings.nokia_token_url,
-                data={
-                    "grant_type": "client_credentials",
-                    "client_id": settings.nokia_client_id,
-                    "client_secret": settings.nokia_client_secret,
-                },
-            )
-            r.raise_for_status()
-            self._token = r.json()["access_token"]
-            return self._token
+    def _headers(self, host: str) -> dict:
+        return {
+            "x-rapidapi-key":  settings.rapidapi_key,
+            "x-rapidapi-host": host,
+            "Content-Type":    "application/json",
+        }
 
     async def _check_sim_swap(self, msisdn: str) -> dict:
-        token = await self._get_token()
         async with httpx.AsyncClient() as c:
             r = await c.post(
-                f"{settings.nokia_api_base_url}/sim-swap/v0/retrieve-date",
-                headers={"Authorization": f"Bearer {token}"},
-                json={"phoneNumber": msisdn},
+                settings.rapidapi_url_sim_swap,
+                headers=self._headers(settings.rapidapi_host_sim_swap),
+                json={"phoneNumber": msisdn, "maxAge": 240},
                 timeout=10.0,
             )
             r.raise_for_status()
-            latest = r.json().get("latestSimChange")
+            data = r.json()
+
+            # Check the response — adjust field names if Nokia returns different keys
+            latest = data.get("latestSimChange") or data.get("swapDate")
             if not latest:
                 return {"recent": False, "hours_ago": None}
-            swap_dt = datetime.fromisoformat(latest.replace("Z", "+00:00"))
-            hours = (datetime.now(timezone.utc) - swap_dt).total_seconds() / 3600
+
+            swap_dt  = datetime.fromisoformat(latest.replace("Z", "+00:00"))
+            hours    = (datetime.now(timezone.utc) - swap_dt).total_seconds() / 3600
             return {"recent": hours < 72, "hours_ago": round(hours, 2)}
 
     async def _verify_number(self, msisdn: str) -> bool:
-        token = await self._get_token()
         async with httpx.AsyncClient() as c:
             r = await c.post(
-                f"{settings.nokia_api_base_url}/number-verification/v0/verify",
-                headers={"Authorization": f"Bearer {token}"},
+                settings.rapidapi_url_number_verification,
+                headers=self._headers(settings.rapidapi_host_number_verification),
                 json={"phoneNumber": msisdn},
                 timeout=10.0,
             )
             r.raise_for_status()
-            return r.json().get("devicePhoneNumberVerified", False)
+            data = r.json()
+
+            # Adjust field name if Nokia returns something different
+            return data.get("devicePhoneNumberVerified", False)
 
     async def _get_device_status(self, msisdn: str) -> bool:
-        token = await self._get_token()
         async with httpx.AsyncClient() as c:
             r = await c.post(
-                f"{settings.nokia_api_base_url}/device-status/v0/connectivity",
-                headers={"Authorization": f"Bearer {token}"},
+                settings.rapidapi_url_device_status,
+                headers=self._headers(settings.rapidapi_host_device_status),
                 json={"phoneNumber": msisdn},
                 timeout=10.0,
             )
             r.raise_for_status()
-            status = r.json().get("connectivityStatus", "UNREACHABLE")
-            return status in ("CONNECTED_SMS", "CONNECTED_DATA")
+            data = r.json()
+
+            # Adjust field name if Nokia returns something different
+            status = data.get("connectivityStatus") or data.get("status", "UNREACHABLE")
+            return status in ("CONNECTED_SMS", "CONNECTED_DATA", "reachable", "REACHABLE")
