@@ -2,17 +2,20 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from app.api.routes import router
+from app.services import camara_client
 from app.services.event_store import EventStore
 from app.config import get_settings
+from app.dependencies import camara_client
 
 settings = get_settings()
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await EventStore().init()
     print(f"[SIMShield] Ready — mock_mode={settings.mock_mode} version={settings.app_version}")
     yield
+    # ── shutdown ──
+    await camara_client.close()
     print("[SIMShield] Shutdown")
 
 

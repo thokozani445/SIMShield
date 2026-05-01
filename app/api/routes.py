@@ -8,6 +8,7 @@ from app.models import (
 from app.services.risk_check_service import RiskCheckService
 from app.services.event_store import EventStore
 from app.config import get_settings
+from app.dependencies import camara_client
 
 settings = get_settings()
 router   = APIRouter()

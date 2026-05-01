@@ -116,7 +116,7 @@ class CamaraClient:
             r = await c.post(
                 settings.rapidapi_url_number_verification,
                 headers=self._headers(settings.rapidapi_host_number_verification),
-                json={"phoneNumber": msisdn},
+                json={"device": {"phoneNumber": msisdn}},
                 timeout=10.0,
             )
             r.raise_for_status()
