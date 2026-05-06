@@ -6,7 +6,10 @@ from app.services import camara_client
 from app.services.event_store import EventStore
 from app.config import get_settings
 from app.dependencies import camara_client
+import logging
 
+
+logging.basicConfig(level=logging.INFO)
 settings = get_settings()
 
 @asynccontextmanager
